@@ -4,11 +4,12 @@ import com.google.gson.JsonObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -27,7 +28,7 @@ public class Channel {
     private Timer channelTimer = null;
     private boolean joinedOnce = false;
     private ChannelState state = ChannelState.CLOSED;
-    private ConcurrentLinkedDeque<Push> pushBuffer = new ConcurrentLinkedDeque<>();
+    private Deque<Push> pushBuffer = new LinkedBlockingDeque<>();
 
     public Channel(final String topic, final JsonObject payload, final Socket socket) {
         this.topic = topic;

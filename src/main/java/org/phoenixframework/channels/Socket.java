@@ -15,13 +15,14 @@ import com.squareup.okhttp.ws.WebSocketListener;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -61,7 +62,7 @@ public class Socket {
      * Annotated WS Endpoint. Private member to prevent confusion with "onConn*" registration methods.
      */
     private PhoenixWSListener wsListener = new PhoenixWSListener();
-    private ConcurrentLinkedDeque<RequestBody> sendBuffer = new ConcurrentLinkedDeque<>();
+    private Deque<RequestBody> sendBuffer = new LinkedBlockingDeque<>();
 
     public Socket(final String endpointUri) throws IOException {
         this(endpointUri, DEFAULT_HEARTBEAT_INTERVAL);
