@@ -1,6 +1,7 @@
 package org.phoenixframework.channels;
 
 class Binding {
+
     final String event;
     final IMessageCallback callback;
 

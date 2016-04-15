@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive;
 import java.util.logging.Logger;
 
 public class Envelope {
+
     private static final Logger LOG = Logger.getLogger(Socket.class.getName());
 
     private String topic;
@@ -18,13 +19,23 @@ public class Envelope {
     private String ref;
 
     @SuppressWarnings("unused")
-    public Envelope() {}
+    public Envelope() {
+    }
 
     public Envelope(final String topic, final String event, final JsonObject payload, final String ref) {
         this.topic = topic;
         this.event = event;
         this.payload = payload;
         this.ref = ref;
+    }
+
+    @Override
+    public String toString() {
+        return "Envelope{" +
+                "topic='" + topic + '\'' +
+                ", event='" + event + '\'' +
+                ", payload=" + payload +
+                '}';
     }
 
     public String getTopic() {
@@ -45,7 +56,9 @@ public class Envelope {
      * @return The ref string or null if not found
      */
     public String getRef() {
-        if(ref != null) return ref;
+        if (ref != null) {
+            return ref;
+        }
         JsonElement refNode = payload.get("ref");
         if (refNode != null && refNode.isJsonPrimitive() && ((JsonPrimitive) refNode).isString()) {
             return refNode.getAsString();
@@ -68,7 +81,6 @@ public class Envelope {
         }
     }
 
-
     /**
      * Helper to retrieve the value of "reason" from the payload
      *
@@ -81,14 +93,5 @@ public class Envelope {
         } else {
             return null;
         }
-    }
-
-    @Override
-    public String toString() {
-        return "Envelope{" +
-                "topic='" + topic + '\'' +
-                ", event='" + event + '\'' +
-                ", payload=" + payload +
-                '}';
     }
 }

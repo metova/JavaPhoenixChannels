@@ -3,7 +3,11 @@ package org.phoenixframework.channels;
 import com.google.gson.JsonObject;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -12,20 +16,17 @@ import java.util.logging.Logger;
  * Encapsulation of a Phoenix channel: a Socket, a topic and the channel's state.
  */
 public class Channel {
-    private static final Logger LOG = Logger.getLogger(Channel.class.getName());
 
+    private static final Logger LOG = Logger.getLogger(Channel.class.getName());
+    public static long DEFAULT_TIMEOUT = 5000;
+    private final List<Binding> bindings = new ArrayList<>();
     private String topic;
     private JsonObject payload;
     private Socket socket;
-    private final List<Binding> bindings = new ArrayList<>();
     private Push joinPush;
-
     private Timer channelTimer = null;
-
     private boolean joinedOnce = false;
     private ChannelState state = ChannelState.CLOSED;
-    public static long DEFAULT_TIMEOUT = 5000;
-
     private ConcurrentLinkedDeque<Push> pushBuffer = new ConcurrentLinkedDeque<>();
 
     public Channel(final String topic, final JsonObject payload, final Socket socket) {
@@ -63,12 +64,20 @@ public class Channel {
         });
     }
 
+    @Override
+    public String toString() {
+        return "Channel{" +
+                "topic='" + topic + '\'' +
+                ", message=" + payload +
+                ", bindings=" + bindings +
+                '}';
+    }
+
     public void rejoinUntilConnected() throws IOException {
-        if(this.state == ChannelState.ERRORED) {
-            if(this.socket.isConnected()) {
+        if (this.state == ChannelState.ERRORED) {
+            if (this.socket.isConnected()) {
                 this.rejoin();
-            }
-            else {
+            } else {
                 scheduleRejoinTimer();
             }
         }
@@ -77,13 +86,12 @@ public class Channel {
     /**
      * Initiates a channel join event
      *
-     * @throws IllegalStateException Thrown if the channel has already been joined
-     * @throws IOException Thrown if the join could not be sent
-     *
      * @return This Push instance
+     * @throws IllegalStateException Thrown if the channel has already been joined
+     * @throws IOException           Thrown if the join could not be sent
      */
     public Push join() throws IllegalStateException, IOException {
-        if(this.joinedOnce) {
+        if (this.joinedOnce) {
             throw new IllegalStateException("Tried to join multiple times. 'join' can only be invoked once per channel");
         }
         this.joinedOnce = true;
@@ -94,7 +102,6 @@ public class Channel {
     public void onClose(final IMessageCallback callback) {
         this.on(ChannelEvent.CLOSE.getPhxEvent(), callback);
     }
-
 
     /**
      * Register an error callback for the channel
@@ -115,13 +122,12 @@ public class Channel {
     }
 
     /**
-     * @param event The event name
+     * @param event    The event name
      * @param callback The callback to be invoked with the event's message
-     *
      * @return The instance's self
      */
     public Channel on(final String event, final IMessageCallback callback) {
-        synchronized(bindings) {
+        synchronized (bindings) {
             this.bindings.add(new Binding(event, callback));
         }
         return this;
@@ -134,7 +140,7 @@ public class Channel {
      * @return The instance's self
      */
     public Channel off(final String event) {
-        synchronized(bindings) {
+        synchronized (bindings) {
             for (final Iterator<Binding> bindingIter = bindings.iterator(); bindingIter.hasNext(); ) {
                 if (bindingIter.next().getEvent().equals(event)) {
                     bindingIter.remove();
@@ -149,10 +155,10 @@ public class Channel {
      * Triggers event signalling to all callbacks bound to the specified event.
      *
      * @param triggerEvent The event name
-     * @param envelope The message's envelope relating to the event or null if not relevant.
+     * @param envelope     The message's envelope relating to the event or null if not relevant.
      */
     void trigger(final String triggerEvent, final Envelope envelope) {
-        synchronized(bindings) {
+        synchronized (bindings) {
             for (final Binding binding : bindings) {
                 if (binding.getEvent().equals(triggerEvent)) {
                     // Channel Events get the full envelope
@@ -165,7 +171,7 @@ public class Channel {
 
     public void rejoin() throws IOException {
         this.sendJoin();
-        while(!this.pushBuffer.isEmpty()) {
+        while (!this.pushBuffer.isEmpty()) {
             this.pushBuffer.removeFirst().send();
         }
     }
@@ -180,24 +186,21 @@ public class Channel {
     /**
      * Pushes a payload to be sent to the channel
      *
-     * @param event The event name
+     * @param event   The event name
      * @param payload The message payload
      * @param timeout The number of milliseconds to wait before triggering a timeout
-     *
      * @return The Push instance used to send the message
-     *
-     * @throws IOException Thrown if the payload cannot be pushed
+     * @throws IOException           Thrown if the payload cannot be pushed
      * @throws IllegalStateException Thrown if the channel has not yet been joined
      */
     public Push push(final String event, final JsonObject payload, final long timeout) throws IOException, IllegalStateException {
-        if(!this.joinedOnce) {
+        if (!this.joinedOnce) {
             throw new IllegalStateException("Unable to push event before channel has been joined");
         }
         final Push pushEvent = new Push(this, event, payload, timeout);
-        if(this.canPush()) {
+        if (this.canPush()) {
             pushEvent.send();
-        }
-        else {
+        } else {
             this.pushBuffer.add(pushEvent);
         }
         return pushEvent;
@@ -239,19 +242,9 @@ public class Channel {
         this.channelTimer.schedule(timerTask, ms);
     }
 
-
     private void sendJoin() throws IOException {
         this.state = ChannelState.JOINING;
         this.joinPush.send();
-    }
-
-    @Override
-    public String toString() {
-        return "Channel{" +
-            "topic='" + topic + '\'' +
-            ", message=" + payload +
-            ", bindings=" + bindings +
-            '}';
     }
 
     private void scheduleRejoinTimer() {

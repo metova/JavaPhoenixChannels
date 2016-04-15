@@ -11,31 +11,38 @@ import com.squareup.okhttp.ResponseBody;
 import com.squareup.okhttp.ws.WebSocket;
 import com.squareup.okhttp.ws.WebSocketCall;
 import com.squareup.okhttp.ws.WebSocketListener;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLSocketFactory;
-import okio.Buffer;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLSocketFactory;
+
+import okio.Buffer;
+
 
 public class Socket {
-    private static final Logger LOG = Logger.getLogger(Socket.class.getName());
 
     public static final int RECONNECT_INTERVAL_MS = 5000;
-
+    private static final Logger LOG = Logger.getLogger(Socket.class.getName());
     private static final int DEFAULT_HEARTBEAT_INTERVAL = 7000;
 
     private final Gson gson = new Gson();
 
     private final OkHttpClient httpClient = new OkHttpClient();
-    private WebSocket webSocket = null;
-
-    private String endpointUri = null;
     private final List<Channel> channels = new ArrayList<>();
+    private WebSocket webSocket = null;
+    private String endpointUri = null;
     private int heartbeatInterval;
     private boolean reconnectOnFailure = true;
 
@@ -56,107 +63,37 @@ public class Socket {
     private PhoenixWSListener wsListener = new PhoenixWSListener();
     private ConcurrentLinkedDeque<RequestBody> sendBuffer = new ConcurrentLinkedDeque<>();
 
-    public class PhoenixWSListener implements WebSocketListener {
-        private PhoenixWSListener() {
-        }
-
-        @Override
-        public void onOpen(final WebSocket webSocket, final Response response) {
-            LOG.log(Level.FINE, "WebSocket onOpen: {0}", webSocket);
-            Socket.this.webSocket = webSocket;
-            cancelReconnectTimer();
-
-            startHeartbeatTimer();
-
-            for (final ISocketOpenCallback callback : socketOpenCallbacks) {
-                callback.onOpen();
-            }
-
-            Socket.this.flushSendBuffer();
-        }
-
-        @Override
-        public void onMessage(final ResponseBody payload) throws IOException {
-            LOG.log(Level.FINE, "Envelope received: {0}", payload);
-
-            try {
-                if (payload.contentType() == WebSocket.TEXT) {
-
-                    final Envelope envelope =
-                            gson.fromJson(payload.charStream(), Envelope.class);
-                    for (final Channel channel : channels) {
-                        if (channel.isMember(envelope.getTopic())) {
-                            channel.trigger(envelope.getEvent(), envelope);
-                        }
-                    }
-
-                    for (final IMessageCallback callback : messageCallbacks) {
-                        callback.onMessage(envelope);
-                    }
-                }
-            } catch (IOException e) {
-                LOG.log(Level.SEVERE, "Failed to read message payload", e);
-            } finally {
-                payload.close();
-            }
-        }
-
-        @Override
-        public void onPong(final Buffer payload) {
-            LOG.log(Level.INFO, "PONG received: {0}", payload);
-        }
-
-        @Override
-        public void onClose(final int code, final String reason) {
-            LOG.log(Level.FINE, "WebSocket onClose {0}/{1}", new Object[]{code, reason});
-            Socket.this.webSocket = null;
-
-            for (final ISocketCloseCallback callback : socketCloseCallbacks) {
-                callback.onClose();
-            }
-        }
-
-        @Override
-        public void onFailure(final IOException e, final Response response) {
-            LOG.log(Level.WARNING, "WebSocket connection error", e);
-            try {
-                for (final IErrorCallback callback : errorCallbacks) {
-
-                    //TODO if there are multiple errorCallbacks do we really want to trigger
-                    //the same channel error callbacks multiple times?
-                    triggerChannelError();
-                    callback.onError(e.toString());
-                }
-            }
-            finally {
-                // Assume closed on failure
-                if(Socket.this.webSocket != null) {
-                    try {
-                        Socket.this.webSocket.close(1001 /*CLOSE_GOING_AWAY*/, "EOF received");
-                    } catch (IOException ioe) {
-                        LOG.log(Level.WARNING, "Failed to explicitly close following failure");
-                    } finally {
-                        Socket.this.webSocket = null;
-                    }
-                }
-                if (reconnectOnFailure) {
-                    scheduleReconnectTimer();
-                }
-            }
-        }
+    public Socket(final String endpointUri) throws IOException {
+        this(endpointUri, DEFAULT_HEARTBEAT_INTERVAL);
     }
 
-    private void startHeartbeatTimer(){
+    public Socket(final String endpointUri, final int heartbeatIntervalInMs) throws IOException {
+        LOG.log(Level.FINE, "PhoenixSocket({0})", endpointUri);
+        this.endpointUri = endpointUri;
+        this.heartbeatInterval = heartbeatIntervalInMs;
+        this.timer = new Timer("Reconnect Timer for " + endpointUri);
+    }
+
+    @Override
+    public String toString() {
+        return "PhoenixSocket{" +
+                "endpointUri='" + endpointUri + '\'' +
+                ", channels=" + channels +
+                ", refNo=" + refNo +
+                ", webSocket=" + webSocket +
+                '}';
+    }
+
+    private void startHeartbeatTimer() {
         Socket.this.heartbeatTimerTask = new TimerTask() {
             @Override
             public void run() {
                 LOG.log(Level.FINE, "heartbeatTimerTask run");
-                if(Socket.this.isConnected()) {
+                if (Socket.this.isConnected()) {
                     try {
                         Envelope envelope = new Envelope("phoenix", "heartbeat", new JsonObject(), Socket.this.makeRef());
                         Socket.this.push(envelope);
-                    }
-                    catch (Exception e) {
+                    } catch (Exception e) {
                         LOG.log(Level.SEVERE, "Failed to send heartbeat", e);
                     }
                 }
@@ -166,7 +103,7 @@ public class Socket {
         timer.schedule(Socket.this.heartbeatTimerTask, Socket.this.heartbeatInterval, Socket.this.heartbeatInterval);
     }
 
-    private void cancelHeartbeatTimer(){
+    private void cancelHeartbeatTimer() {
         if (Socket.this.heartbeatTimerTask != null) {
             Socket.this.heartbeatTimerTask.cancel();
         }
@@ -197,17 +134,6 @@ public class Socket {
         if (Socket.this.reconnectTimerTask != null) {
             Socket.this.reconnectTimerTask.cancel();
         }
-    }
-
-    public Socket(final String endpointUri) throws IOException {
-        this(endpointUri, DEFAULT_HEARTBEAT_INTERVAL);
-    }
-
-    public Socket(final String endpointUri, final int heartbeatIntervalInMs) throws IOException {
-        LOG.log(Level.FINE, "PhoenixSocket({0})", endpointUri);
-        this.endpointUri = endpointUri;
-        this.heartbeatInterval = heartbeatIntervalInMs;
-        this.timer = new Timer("Reconnect Timer for " + endpointUri);
     }
 
     public void disconnect() throws IOException {
@@ -291,8 +217,7 @@ public class Socket {
         if (this.isConnected()) {
             try {
                 webSocket.sendMessage(body);
-            }
-            catch(IllegalStateException e) {
+            } catch (IllegalStateException e) {
                 LOG.log(Level.SEVERE, "Attempted to send push when socket is not open", e);
             }
         } else {
@@ -347,18 +272,9 @@ public class Socket {
         return this;
     }
 
-    @Override
-    public String toString() {
-        return "PhoenixSocket{" +
-            "endpointUri='" + endpointUri + '\'' +
-            ", channels=" + channels +
-            ", refNo=" + refNo +
-            ", webSocket=" + webSocket +
-            '}';
-    }
-
     /**
      * Should the socket attempt to reconnect if websocket.onFailure is called.
+     *
      * @param reconnectOnFailure reconnect value
      */
     public void reconectOnFailure(final boolean reconnectOnFailure) {
@@ -400,5 +316,95 @@ public class Socket {
 
     static String replyEventName(final String ref) {
         return "chan_reply_" + ref;
+    }
+
+    public class PhoenixWSListener implements WebSocketListener {
+
+        private PhoenixWSListener() {
+        }
+
+        @Override
+        public void onOpen(final WebSocket webSocket, final Response response) {
+            LOG.log(Level.FINE, "WebSocket onOpen: {0}", webSocket);
+            Socket.this.webSocket = webSocket;
+            cancelReconnectTimer();
+
+            startHeartbeatTimer();
+
+            for (final ISocketOpenCallback callback : socketOpenCallbacks) {
+                callback.onOpen();
+            }
+
+            Socket.this.flushSendBuffer();
+        }
+
+        @Override
+        public void onFailure(final IOException e, final Response response) {
+            LOG.log(Level.WARNING, "WebSocket connection error", e);
+            try {
+                for (final IErrorCallback callback : errorCallbacks) {
+
+                    //TODO if there are multiple errorCallbacks do we really want to trigger
+                    //the same channel error callbacks multiple times?
+                    triggerChannelError();
+                    callback.onError(e.toString());
+                }
+            } finally {
+                // Assume closed on failure
+                if (Socket.this.webSocket != null) {
+                    try {
+                        Socket.this.webSocket.close(1001 /*CLOSE_GOING_AWAY*/, "EOF received");
+                    } catch (IOException ioe) {
+                        LOG.log(Level.WARNING, "Failed to explicitly close following failure");
+                    } finally {
+                        Socket.this.webSocket = null;
+                    }
+                }
+                if (reconnectOnFailure) {
+                    scheduleReconnectTimer();
+                }
+            }
+        }
+
+        @Override
+        public void onMessage(final ResponseBody payload) throws IOException {
+            LOG.log(Level.FINE, "Envelope received: {0}", payload);
+
+            try {
+                if (payload.contentType() == WebSocket.TEXT) {
+
+                    final Envelope envelope =
+                            gson.fromJson(payload.charStream(), Envelope.class);
+                    for (final Channel channel : channels) {
+                        if (channel.isMember(envelope.getTopic())) {
+                            channel.trigger(envelope.getEvent(), envelope);
+                        }
+                    }
+
+                    for (final IMessageCallback callback : messageCallbacks) {
+                        callback.onMessage(envelope);
+                    }
+                }
+            } catch (IOException e) {
+                LOG.log(Level.SEVERE, "Failed to read message payload", e);
+            } finally {
+                payload.close();
+            }
+        }
+
+        @Override
+        public void onPong(final Buffer payload) {
+            LOG.log(Level.INFO, "PONG received: {0}", payload);
+        }
+
+        @Override
+        public void onClose(final int code, final String reason) {
+            LOG.log(Level.FINE, "WebSocket onClose {0}/{1}", new Object[]{code, reason});
+            Socket.this.webSocket = null;
+
+            for (final ISocketCloseCallback callback : socketCloseCallbacks) {
+                callback.onClose();
+            }
+        }
     }
 }

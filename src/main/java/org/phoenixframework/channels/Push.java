@@ -3,11 +3,16 @@ package org.phoenixframework.channels;
 import com.google.gson.JsonObject;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TimerTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Push {
+
     private static final Logger LOG = Logger.getLogger(Push.class.getName());
 
     private Channel channel = null;
@@ -29,21 +34,20 @@ public class Push {
     /**
      * Registers for notifications on status messages
      *
-     * @param status The message status to register callbacks on
+     * @param status   The message status to register callbacks on
      * @param callback The callback handler
-     *
      * @return This instance's self
      */
     public Push receive(final String status, final IMessageCallback callback) {
-        if(this.receivedEnvelope != null) {
+        if (this.receivedEnvelope != null) {
             final String receivedStatus = this.receivedEnvelope.getResponseStatus();
-            if(receivedStatus != null && receivedStatus.equals(status)) {
+            if (receivedStatus != null && receivedStatus.equals(status)) {
                 callback.onMessage(this.receivedEnvelope);
             }
         }
-        synchronized(recHooks) {
+        synchronized (recHooks) {
             List<IMessageCallback> statusHooks = this.recHooks.get(status);
-            if(statusHooks == null) {
+            if (statusHooks == null) {
                 statusHooks = new ArrayList<>();
                 this.recHooks.put(status, statusHooks);
             }
@@ -57,12 +61,12 @@ public class Push {
      * Registers for notification of message response timeout
      *
      * @param callback The callback handler called when timeout is reached
-     *
      * @return This instance's self
      */
     public Push timeout(final ITimeoutCallback callback) {
-        if(this.timeoutHook.hasCallback())
+        if (this.timeoutHook.hasCallback()) {
             throw new IllegalStateException("Only a single after hook can be applied to a Push");
+        }
 
         this.timeoutHook.setCallback(callback);
 
@@ -103,12 +107,12 @@ public class Push {
         this.channel.scheduleTask(this.timeoutHook.getTimerTask(), this.timeoutHook.getMs());
     }
 
-    private TimerTask createTimerTask(){
+    private TimerTask createTimerTask() {
         final Runnable callback = new Runnable() {
             @Override
             public void run() {
                 Push.this.cancelRefEvent();
-                if(Push.this.timeoutHook.hasCallback()) {
+                if (Push.this.timeoutHook.hasCallback()) {
                     Push.this.timeoutHook.getCallback().onTimeout();
                 }
             }
@@ -125,7 +129,7 @@ public class Push {
     private void matchReceive(final String status, final Envelope envelope) {
         synchronized (recHooks) {
             final List<IMessageCallback> statusCallbacks = this.recHooks.get(status);
-            if(statusCallbacks != null) {
+            if (statusCallbacks != null) {
                 for (final IMessageCallback callback : statusCallbacks) {
                     callback.onMessage(envelope);
                 }
@@ -162,6 +166,7 @@ public class Push {
     }
 
     private class TimeoutHook {
+
         private final long ms;
         private ITimeoutCallback callback;
         private TimerTask timerTask;
@@ -178,6 +183,10 @@ public class Push {
             return callback;
         }
 
+        public void setCallback(final ITimeoutCallback callback) {
+            this.callback = callback;
+        }
+
         public TimerTask getTimerTask() {
             return timerTask;
         }
@@ -186,12 +195,8 @@ public class Push {
             this.timerTask = timerTask;
         }
 
-        public boolean hasCallback(){
+        public boolean hasCallback() {
             return this.callback != null;
-        }
-
-        public void setCallback(final ITimeoutCallback callback){
-            this.callback = callback;
         }
     }
 }
