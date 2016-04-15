@@ -64,15 +64,7 @@ public class Socket {
     private PhoenixWSListener wsListener = new PhoenixWSListener();
     private Deque<RequestBody> sendBuffer = new LinkedBlockingDeque<>();
 
-    public Socket(final String endpointUri) throws IOException {
-        this(endpointUri, DEFAULT_HEARTBEAT_INTERVAL);
-    }
-
-    public Socket(final String endpointUri, final int heartbeatIntervalInMs) throws IOException {
-        LOG.log(Level.FINE, "PhoenixSocket({0})", endpointUri);
-        this.endpointUri = endpointUri;
-        this.heartbeatInterval = heartbeatIntervalInMs;
-        this.timer = new Timer("Reconnect Timer for " + endpointUri);
+    public Socket() {
     }
 
     @Override
@@ -122,7 +114,7 @@ public class Socket {
             public void run() {
                 LOG.log(Level.FINE, "reconnectTimerTask run");
                 try {
-                    Socket.this.connect();
+                    Socket.this.connect(endpointUri);
                 } catch (Exception e) {
                     LOG.log(Level.SEVERE, "Failed to reconnect to " + Socket.this.wsListener, e);
                 }
@@ -146,11 +138,18 @@ public class Socket {
         cancelReconnectTimer();
     }
 
-    public void connect() throws IOException {
+    public void connect(String endpointUri) throws IOException {
+        connect(endpointUri, DEFAULT_HEARTBEAT_INTERVAL);
+    }
+
+    public void connect(String endpointUri, int heartbeatInterval) throws IOException {
         LOG.log(Level.FINE, "connect");
         disconnect();
+        this.endpointUri = endpointUri;
+        this.heartbeatInterval = heartbeatInterval;
+        this.timer = new Timer("Reconnect Timer for " + endpointUri);
         // No support for ws:// or ws:// in okhttp. See https://github.com/square/okhttp/issues/1652
-        final String httpUrl = this.endpointUri.replaceFirst("^ws:", "http:").replaceFirst("^wss:", "https:");
+        final String httpUrl = endpointUri.replaceFirst("^ws:", "http:").replaceFirst("^wss:", "https:");
         final Request request = new Request.Builder().url(httpUrl).build();
         final WebSocketCall wsCall = WebSocketCall.create(httpClient, request);
         wsCall.enqueue(wsListener);
