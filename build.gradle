@@ -13,6 +13,7 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.squareup.okhttp3:okhttp-ws:3.2.0'
     compile "com.google.code.gson:gson:2.6.2"
+    compile "javax.inject:javax.inject:1"
 }
 
 task javadocJar(type: Jar) {

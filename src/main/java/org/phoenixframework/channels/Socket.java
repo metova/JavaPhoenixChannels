@@ -17,6 +17,8 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.inject.Inject;
+
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -34,9 +36,9 @@ public class Socket {
     private static final Logger LOG = Logger.getLogger(Socket.class.getName());
     private static final int DEFAULT_HEARTBEAT_INTERVAL = 7000;
 
-    private final Gson gson = new Gson();
+    private final Gson gson;
 
-    private final OkHttpClient httpClient = new OkHttpClient.Builder().build();
+    private final OkHttpClient httpClient;
     private final List<Channel> channels = new ArrayList<>();
     private WebSocket webSocket = null;
     private String endpointUri = null;
@@ -60,7 +62,10 @@ public class Socket {
     private PhoenixWSListener wsListener = new PhoenixWSListener();
     private Deque<RequestBody> sendBuffer = new LinkedBlockingDeque<>();
 
-    public Socket() {
+    @Inject
+    public Socket(OkHttpClient okhttp, Gson gson) {
+        this.httpClient = okhttp;
+        this.gson = gson;
     }
 
     @Override
