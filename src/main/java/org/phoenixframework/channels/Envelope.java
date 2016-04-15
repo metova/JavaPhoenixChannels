@@ -46,7 +46,7 @@ public class Envelope {
         return event;
     }
 
-    public JsonElement getPayload() {
+    public JsonObject getPayload() {
         return payload;
     }
 
