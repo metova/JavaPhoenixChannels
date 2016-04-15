@@ -1,9 +1,8 @@
 package org.phoenixframework.channels;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.RequestBody;
@@ -30,7 +29,7 @@ public class Socket {
 
     private static final int DEFAULT_HEARTBEAT_INTERVAL = 7000;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Gson gson = new Gson();
 
     private final OkHttpClient httpClient = new OkHttpClient();
     private WebSocket webSocket = null;
@@ -82,8 +81,9 @@ public class Socket {
 
             try {
                 if (payload.contentType() == WebSocket.TEXT) {
+
                     final Envelope envelope =
-                        objectMapper.readValue(payload.byteStream(), Envelope.class);
+                            gson.fromJson(payload.charStream(), Envelope.class);
                     for (final Channel channel : channels) {
                         if (channel.isMember(envelope.getTopic())) {
                             channel.trigger(envelope.getEvent(), envelope);
@@ -153,7 +153,7 @@ public class Socket {
                 LOG.log(Level.FINE, "heartbeatTimerTask run");
                 if(Socket.this.isConnected()) {
                     try {
-                        Envelope envelope = new Envelope("phoenix", "heartbeat", new ObjectNode(JsonNodeFactory.instance), Socket.this.makeRef());
+                        Envelope envelope = new Envelope("phoenix", "heartbeat", new JsonObject(), Socket.this.makeRef());
                         Socket.this.push(envelope);
                     }
                     catch (Exception e) {
@@ -244,7 +244,7 @@ public class Socket {
      * @param payload The message payload
      * @return A Channel instance to be used for sending and receiving events for the topic
      */
-    public Channel chan(final String topic, final JsonNode payload) {
+    public Channel chan(final String topic, final JsonObject payload) {
         LOG.log(Level.FINE, "chan: {0}, {1}", new Object[]{topic, payload});
         final Channel channel = new Channel(topic, payload, Socket.this);
         synchronized (channels) {
@@ -278,12 +278,12 @@ public class Socket {
      */
     public Socket push(final Envelope envelope) throws IOException {
         LOG.log(Level.FINE, "Pushing envelope: {0}", envelope);
-        final ObjectNode node = objectMapper.createObjectNode();
-        node.put("topic", envelope.getTopic());
-        node.put("event", envelope.getEvent());
-        node.put("ref", envelope.getRef());
-        node.set("payload", envelope.getPayload() == null ? objectMapper.createObjectNode() : envelope.getPayload());
-        final String json = objectMapper.writeValueAsString(node);
+        final JsonObject node = new JsonObject();
+        node.addProperty("topic", envelope.getTopic());
+        node.addProperty("event", envelope.getEvent());
+        node.addProperty("ref", envelope.getRef());
+        node.add("payload", envelope.getPayload() == null ? new JsonObject() : envelope.getPayload());
+        final String json = gson.toJson(node);
         LOG.log(Level.FINE, "Sending JSON: {0}", json);
 
         RequestBody body = RequestBody.create(WebSocket.TEXT, json);

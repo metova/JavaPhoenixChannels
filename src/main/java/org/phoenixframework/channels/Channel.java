@@ -1,6 +1,6 @@
 package org.phoenixframework.channels;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.google.gson.JsonObject;
 
 import java.io.IOException;
 import java.util.*;
@@ -15,7 +15,7 @@ public class Channel {
     private static final Logger LOG = Logger.getLogger(Channel.class.getName());
 
     private String topic;
-    private JsonNode payload;
+    private JsonObject payload;
     private Socket socket;
     private final List<Binding> bindings = new ArrayList<>();
     private Push joinPush;
@@ -28,7 +28,7 @@ public class Channel {
 
     private ConcurrentLinkedDeque<Push> pushBuffer = new ConcurrentLinkedDeque<>();
 
-    public Channel(final String topic, final JsonNode payload, final Socket socket) {
+    public Channel(final String topic, final JsonObject payload, final Socket socket) {
         this.topic = topic;
         this.payload = payload;
         this.socket = socket;
@@ -189,7 +189,7 @@ public class Channel {
      * @throws IOException Thrown if the payload cannot be pushed
      * @throws IllegalStateException Thrown if the channel has not yet been joined
      */
-    public Push push(final String event, final JsonNode payload, final long timeout) throws IOException, IllegalStateException {
+    public Push push(final String event, final JsonObject payload, final long timeout) throws IOException, IllegalStateException {
         if(!this.joinedOnce) {
             throw new IllegalStateException("Unable to push event before channel has been joined");
         }
@@ -203,7 +203,7 @@ public class Channel {
         return pushEvent;
     }
 
-    public Push push(final String event, final JsonNode payload) throws IOException {
+    public Push push(final String event, final JsonObject payload) throws IOException {
         return push(event, payload, DEFAULT_TIMEOUT);
     }
 

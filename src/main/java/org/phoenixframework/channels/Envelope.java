@@ -1,30 +1,26 @@
 package org.phoenixframework.channels;
 
-
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 import java.util.logging.Logger;
 
 public class Envelope {
     private static final Logger LOG = Logger.getLogger(Socket.class.getName());
 
-    @JsonProperty
     private String topic;
 
-    @JsonProperty
     private String event;
 
-    @JsonProperty(value="payload")
-    private JsonNode payload;
+    private JsonObject payload;
 
-    @JsonProperty
     private String ref;
 
     @SuppressWarnings("unused")
     public Envelope() {}
 
-    public Envelope(final String topic, final String event, final JsonNode payload, final String ref) {
+    public Envelope(final String topic, final String event, final JsonObject payload, final String ref) {
         this.topic = topic;
         this.event = event;
         this.payload = payload;
@@ -39,7 +35,7 @@ public class Envelope {
         return event;
     }
 
-    public JsonNode getPayload() {
+    public JsonElement getPayload() {
         return payload;
     }
 
@@ -50,8 +46,12 @@ public class Envelope {
      */
     public String getRef() {
         if(ref != null) return ref;
-        final JsonNode refNode = payload.get("ref");
-        return refNode != null ? refNode.textValue() : null;
+        JsonElement refNode = payload.get("ref");
+        if (refNode != null && refNode.isJsonPrimitive() && ((JsonPrimitive) refNode).isString()) {
+            return refNode.getAsString();
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -60,8 +60,12 @@ public class Envelope {
      * @return The status string or null if not found
      */
     public String getResponseStatus() {
-        final JsonNode statusNode = payload.get("status");
-        return statusNode == null ? null : statusNode.textValue();
+        JsonElement statusNode = payload.get("status");
+        if (statusNode != null && statusNode.isJsonPrimitive() && ((JsonPrimitive) statusNode).isString()) {
+            return statusNode.getAsString();
+        } else {
+            return null;
+        }
     }
 
 
@@ -71,8 +75,12 @@ public class Envelope {
      * @return The reason string or null if not found
      */
     public String getReason() {
-        final JsonNode reasonNode = payload.get("reason");
-        return reasonNode == null ? null : reasonNode.textValue();
+        JsonElement reasonNode = payload.get("reason");
+        if (reasonNode != null && reasonNode.isJsonPrimitive() && ((JsonPrimitive) reasonNode).isString()) {
+            return reasonNode.getAsString();
+        } else {
+            return null;
+        }
     }
 
     @Override

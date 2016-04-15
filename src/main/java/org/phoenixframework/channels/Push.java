@@ -1,6 +1,6 @@
 package org.phoenixframework.channels;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.google.gson.JsonObject;
 
 import java.io.IOException;
 import java.util.*;
@@ -13,13 +13,13 @@ public class Push {
     private Channel channel = null;
     private String event = null;
     private String refEvent = null;
-    private JsonNode payload = null;
+    private JsonObject payload = null;
     private Envelope receivedEnvelope = null;
     private Map<String, List<IMessageCallback>> recHooks = new HashMap<>();
     private boolean sent = false;
     private TimeoutHook timeoutHook;
 
-    Push(final Channel channel, final String event, final JsonNode payload, final long timeout) {
+    Push(final Channel channel, final String event, final JsonObject payload, final long timeout) {
         this.channel = channel;
         this.event = event;
         this.payload = payload;
@@ -141,7 +141,7 @@ public class Push {
         return event;
     }
 
-    JsonNode getPayload() {
+    JsonObject getPayload() {
         return payload;
     }
 
