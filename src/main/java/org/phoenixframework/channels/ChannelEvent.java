@@ -9,7 +9,7 @@ public enum ChannelEvent {
 
     private final String phxEvent;
 
-    private ChannelEvent(final String phxEvent) {
+    ChannelEvent(final String phxEvent) {
         this.phxEvent = phxEvent;
     }
 
