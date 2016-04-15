@@ -3,15 +3,6 @@ package org.phoenixframework.channels;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
-import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.RequestBody;
-import com.squareup.okhttp.Response;
-import com.squareup.okhttp.ResponseBody;
-import com.squareup.okhttp.ws.WebSocket;
-import com.squareup.okhttp.ws.WebSocketCall;
-import com.squareup.okhttp.ws.WebSocketListener;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,9 +17,14 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLSocketFactory;
-
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import okhttp3.ws.WebSocket;
+import okhttp3.ws.WebSocketCall;
+import okhttp3.ws.WebSocketListener;
 import okio.Buffer;
 
 
@@ -40,7 +36,7 @@ public class Socket {
 
     private final Gson gson = new Gson();
 
-    private final OkHttpClient httpClient = new OkHttpClient();
+    private final OkHttpClient httpClient = new OkHttpClient.Builder().build();
     private final List<Channel> channels = new ArrayList<>();
     private WebSocket webSocket = null;
     private String endpointUri = null;
@@ -295,14 +291,6 @@ public class Socket {
         }
     }
 
-    public void setSSLSocketFactory(SSLSocketFactory sslSocketFactory) {
-        httpClient.setSslSocketFactory(sslSocketFactory);
-    }
-
-    public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
-        httpClient.setHostnameVerifier(hostnameVerifier);
-    }
-
     private void flushSendBuffer() {
         while (this.isConnected() && !this.sendBuffer.isEmpty()) {
             final RequestBody body = this.sendBuffer.removeFirst();
@@ -385,7 +373,7 @@ public class Socket {
                         callback.onMessage(envelope);
                     }
                 }
-            } catch (IOException e) {
+            } catch (RuntimeException e) {
                 LOG.log(Level.SEVERE, "Failed to read message payload", e);
             } finally {
                 payload.close();
